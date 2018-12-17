@@ -14,10 +14,10 @@ const unsigned int SCR_HEIGHT = 800;
 
 // global variables
 ShaderProgram *shader = nullptr;
-float scale = 2.f;
-float centerX = -0.5;
-float centerY = 0.0;
-float ratio = 1.0;
+double scale    {2};        // zoom level
+double centerX  {-0.5};     // center point x
+double centerY  {0.0};      // center pointy
+double ratio    {1.0};      // aspect ratio
 
 int main()
 {

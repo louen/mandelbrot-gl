@@ -8,21 +8,31 @@
 #include <GLFW/glfw3.h>
 #include <CoreGL.hpp>
 
-/// class abstracting shader loading
+/// Class abstracting shader loading. Only handles vertex and fragment shaders
 class ShaderProgram
 {
     public:
         ShaderProgram();
 
+        /// Compile a shader from a given string
         void loadShaderStrings(const std::string& vsString, const std::string& psString);
-        void loadShaderFiles ( const std::string& vsFileName, const std::string& psFileName);
 
+        /// Compule a shader from given files (handles includes)
+        void loadShaderFiles (const std::string& vsFileName, const std::string& psFileName);
+
+        /// Calls glUseProgram() on the shader
         void useProgram() const;
+
+        /// Returns the shader's handle
         GLint getID() const {return m_shaderProgram;}
 
         ~ShaderProgram();
     private:
-        void initialize( const char* vsStream, const char* psStream);
+        /// Common code for shader initialization
+        void initialize(const std::string& vs, const std::string& ps);
+
+        /// Helper function for shader #include
+        static std::string preprocessIncludes(const std::string& shader, const std::string& filename, uint level = 0);
 
       private:
         GLint m_vertexShader;

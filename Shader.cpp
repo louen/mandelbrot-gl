@@ -25,8 +25,16 @@ void printWithLines(const std::string& fileStr)
     std::string line;
     while (std::getline(ss, line))
     {
-        std::cout << linenum << "\t" << line << std::endl;
-        ++linenum;
+        if (line.substr(0,5) != "#line")
+        {
+            std::cout << linenum << "\t" << line << std::endl;
+            ++linenum;
+        }
+        else
+        {
+            std::string strnum = line.substr(6);
+            linenum = std::stoi(strnum);
+        }
     }
 }
 
@@ -115,7 +123,8 @@ std::string ShaderProgram::preprocessIncludes(const std::string &shader, const s
         {
             if (line.find("#version") == std::string::npos)
             {
-                //output << "#line "<< line_number << " \"" << filename << "\""  << std::endl;
+                //output << "#line "<< line_number << "  " << filename << std::endl;
+                output << "#line "<< line_number << std::endl;
             }
             output << line << std::endl;
         }

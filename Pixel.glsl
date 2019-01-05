@@ -8,7 +8,7 @@ uniform uint max = 1000u;
 
 void main()
 {
-    vec2 p =  pos + center;
+    vec2 p =  pos * vec2(scale*ratio, scale) + center;
     vec2 c = p;
     //Max number of iterations will arbitrarily be defined as 100. Finer detail with more computation will be found for larger values.
     vec3 color = vec3(0,0,0);

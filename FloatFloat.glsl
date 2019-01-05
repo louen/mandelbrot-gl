@@ -25,10 +25,9 @@ vec2 ff_add(vec2 a, vec2 b)
               + a.y + b.y;  // sum the low parts
 
     // add12
-    float x = r + s; // carry
-    float y = s - (x - r);
-
-    return vec2(x,y);
+    result.x = r + s; // carry
+    result.y = s - (result.x - r);
+    return result;
 }
 
 // Multiplication of 2 floatfloat

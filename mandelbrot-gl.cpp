@@ -1,16 +1,26 @@
 // OpenGL mandelbrot explorer
 // Credits :
 // "Implementation of float-float operators on graphics hardware" (Da Graçca & Defour 2006)
+// "Extended-Precision Floating-Point Numbers for GPU Computation" (Andrew Thall, 2007)
 // "Heavy computing with GLSL"  H.Thasler https://www.thasler.com/blog/blog/glsl-part2-emu
 // "Emulated 64-bit floats in OpenGL ES shader"  https://betelge.wordpress.com/2016/08/14/emulated-64-bit-floats-in-opengl-es-shader/
+#define NOMINMAX
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <cstdint>
+#include <cinttypes>
+#include <algorithm>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBI_MSC_SECURE_CRT
+#include <stb_image_write.h>
 
 #include "Shader.hpp"
+#include "DoubleFloat.hpp"
+
 
 // glfw callbacks
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -52,37 +62,7 @@ class SPMandelbrotShader : public MandelbrotShader
     GLint m_ratioUniform;
 };
 
-/// Double precision emulation : represent a `double` with two `float`s. Aka FloatFloat
-struct DoubleFloat
-{
-    union
-    {
-        struct
-        {
-            float high;
-            float low;
-        };
-        float values[2];
-    };
 
-    DoubleFloat()  {} /// Create an uninitialized FloatFloat
-    DoubleFloat( float a, float b ) : high(a), low(b) {} /// Create a FloatFloat from two values
-    DoubleFloat ( double x ) { fromDouble(x);} /// Create a FloatFloat from a double
-
-    /// Initialize the float values from a double precision value
-    inline void fromDouble( double x )
-    {
-        high = static_cast<float>(x); // Cast to float, losing precision
-        const double highd = static_cast<double>(high); // cast back to double
-        low = static_cast<float>(x - highd); // store the remainder
-    }
-
-    /// convert the value back to a double
-    double toDouble()
-    {
-        return static_cast<double>(high) + static_cast<double>(low);
-    }
-};
 
 /// Double-precision shader
 class DPMandelbrotShader : public MandelbrotShader
@@ -130,35 +110,161 @@ double centerY  {0.0};      // center point y
 double ratio    {1.0};      // aspect ratio
 
 //-0.487776 1.32283 3.00874e-06
-void updateVerts(float* vertices, double centerX, double centerY, double scale, double ratio)
+
+void exportImgFloat( double centerX, double centerY, double scale, double ratio )
 {
-    for ( uint i = 0 ; i < 4; ++i)
+    uchar* img = new uchar[3 * 800 * 800];
+    memset( img, 0x0, 3*800*800 );
+
+    for ( int i = 0; i < 800; ++i )
     {
-        float posX = vertices[3*i];
-        float posY = vertices[3*i +1];
 
-        double cposX = posX * scale * ratio;
-        double cposY = posY * scale;
+        for ( int j = 0; j < 800; ++j )
+        {
+            // normalized coordinate
+            const float aPosX = float( i - 400 ) / float( 400 );
+            const float aPosY = float( j - 400 ) / float( 400 );
 
-        DoubleFloat x(cposX);
-        DoubleFloat y(cposY);
+            const float cPosX = float( centerX ) + aPosX * float( scale ) * float( ratio );
+            const float cPosY = float( centerY ) + aPosY * float( scale );
 
-        vertices[3*4 + 4*i + 0] = x.high;
-        vertices[3*4 + 4*i + 1] = x.low;
-        vertices[3*4 + 4*i + 2] = y.high;
-        vertices[3*4 + 4*i + 3] = y.low;
+            if ( cPosX * cPosX + cPosY * cPosY > 4.f )
+            {
+                uchar* pix = img + (((800-j) * 800 + i) * 3);
+                pix[0] = 0xff;
+                pix[1] = 0xff;
+                pix[2] = 0;
+            }
+        }
     }
+    stbi_write_png( "float.png", 800, 800, 3, img, 0 );
+    delete [] img;
 }
+
+
+void exportImgDouble( double centerX, double centerY, double scale, double ratio )
+{
+    uchar* img = new uchar[3 * 800 * 800];
+    memset( img, 0x0, 3*800*800 );
+
+    for ( int i = 0; i < 800; ++i )
+    {
+
+        for ( int j = 0; j < 800; ++j )
+        {
+            // normalized coordinate
+            const float aPosX = float( i - 400 ) / float( 400 );
+            const float aPosY = float( j - 400 ) / float( 400 );
+
+            const double cPosX = ( centerX ) + aPosX * ( scale ) * ( ratio );
+            const double cPosY = ( centerY ) + aPosY * ( scale );
+
+            if ( cPosX * cPosX + cPosY * cPosY > 4.0 )
+            {
+                uchar* pix = img + (((800-j) * 800 + i) * 3);
+                pix[0] = 0;
+                pix[1] = 0xff;
+                pix[2] = 0;
+            }
+        }
+    }
+    stbi_write_png( "double.png", 800, 800, 3, img, 0 );
+    delete [] img;
+}
+
+void exportImgFloatFloat( double centerX, double centerY, double scale, double ratio )
+{
+    uchar* img = new uchar[3 * 800 * 800];
+    memset( img, 0x0, 3*800*800 );
+
+
+    DoubleFloat centerXX( centerX );
+    DoubleFloat centerYY( centerY );
+    DoubleFloat scaleFF( scale );
+    ComplexDoubleFloat center( centerXX, centerYY );
+    ComplexDoubleFloat scaleF( DoubleFloat( scale * ratio ), DoubleFloat( scale ) );
+
+    double mm = 0;
+
+    for ( int i = 0; i < 800; ++i )
+    {
+
+        for ( int j = 0; j < 800; ++j )
+        {
+            // normalized coordinate
+            const float aPosX = float( i - 400 ) / float( 400 );
+            const float aPosY = float( j - 400 ) / float( 400 );
+
+            ComplexDoubleFloat aPos( DoubleFloat( aPosX, 0 ), DoubleFloat( aPosY, 0 ) );
+            ComplexDoubleFloat p = cff_add( center, cff_scale( aPos, scaleF ) );
+
+
+            const double cPosX = ( centerX ) + aPosX * ( scale ) * ( ratio );
+            const double cPosY = ( centerY ) + aPosY * ( scale );
+            CORE_WARN_IF( std::abs( cPosX - p.real.toDouble()) > 1e-13, "x diff "<<cPosX - p.real.toDouble());
+            CORE_WARN_IF( std::abs( cPosY - p.im.toDouble()) > 1e-13, "y diff "<<cPosY - p.im.toDouble());
+
+            mm = std::max(mm, std::abs( cPosX - ff_add( cff_scale( aPos, scaleF ).real, centerXX ).toDouble() ) );
+
+            const double norm = cPosX * cPosX + cPosY * cPosY;
+
+            CORE_WARN_IF( std::abs( norm - cff_norm(p).toDouble()) > 1e-13, "n diff "<<norm - cff_norm(p).toDouble());
+
+            if (ff_cmp(cff_norm(p), DoubleFloat(4.f,0)) > 0)
+            {
+                uchar* pix = img + (((800-j) * 800 + i) * 3);
+                pix[0] = 0;
+                pix[1] = 0;
+                pix[2] = 0xff;
+            }
+        }
+    }
+    std::cout << mm<<std::endl;
+    stbi_write_png( "floatfloat.png", 800, 800, 3, img, 0 );
+    delete [] img;
+}
+
+std::string float2hex( float x )
+{
+    static_assert(sizeof( float ) == sizeof( uint32 ), "`float` is not 32 bits wide");
+    union { float f; uint32 i; } f2ui;
+    char buf[sizeof( "0x00000000" )];
+    f2ui.f = x;
+    sprintf_s( buf, "0x%" PRIx32 , f2ui.i );
+    return std::string( buf );
+}
+
+std::string double2hex( double x )
+{
+    static_assert(sizeof( double ) == sizeof( uint64 ), "`float` is not 32 bits wide");
+    union { double d; uint64 i; } d2ui;
+    char buf[sizeof( "0x0000000000000000" )];
+    d2ui.d = x;
+    sprintf_s( buf, "0x%" PRIx64, d2ui.i );
+    return std::string( buf );
+}
+
+
 
 int main()
 {
     centerY = 1.93649;
     scale = 2.86129e-6;
+
+    //exportImgFloat( centerX, centerY, scale, ratio );
+    //exportImgDouble( centerX, centerY, scale, ratio );
+    //exportImgFloatFloat( centerX, centerY, scale, ratio );
+
+    DoubleFloat cX( centerX );
+    DoubleFloat sX( scale * double( 0.1 ) );
+
+    ff_add( cX, sX );
+    
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // glfw window creation
@@ -181,6 +287,8 @@ int main()
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
+
+    GL_ASSERT( glDisable( GL_DEPTH_TEST ) );
 
     std::cout << "Renderer : " << glGetString( GL_RENDERER ) << std::endl;
     std::cout << "Vendor   : " << glGetString( GL_VENDOR ) << std::endl;
@@ -205,18 +313,12 @@ int main()
          1.0f, -1.0f, 0.0f,  // bottom right
         -1.0f, -1.0f, 0.0f, // bottom left
         -1.0f,  1.0f, 0.0f,   // top left
-
-        0.f,0.f,0.f,0.f,0.f,
-        0.f,0.f,0.f,0.f,0.f,
-        0.f,0.f,0.f,0.f,0.f,
-        0.f,0.f,0.f,0.f,0.f // placeholders
     };
     unsigned int indices[] = {
         0, 1, 3, // first triangle
         1, 2, 3  // second triangle
     };
 
-    updateVerts(vertices, centerX, centerY, scale, ratio);
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -244,9 +346,6 @@ int main()
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-
-        updateVerts(vertices, centerX, centerY, scale, ratio);
-
 
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);

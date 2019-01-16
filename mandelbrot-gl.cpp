@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include <CoreMacros.hpp>
+
 #include "Shader.hpp"
 #include "FloatFloat.hpp"
 
@@ -27,78 +28,70 @@ void keyboard_callback(GLFWwindow* window, int key, int scancode, int action, in
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 800;
 
-// shader interface for the precision shaders
-class MandelbrotShader: public ShaderProgram
+// Shaders available
+enum ShaderType
 {
-    public:
-    virtual void update( double scale, double centerX, double centerY, double ratio) = 0;
+    SHADER_FLOAT = 0, // Basic shader with floating-point precision
+    SHADER_FLOATFLOAT, // Double precision emulation with 2 floats
+    MAX_SHADERS // Total number of available shaders
 };
 
-/// Single precision shader
-class SPMandelbrotShader : public MandelbrotShader
+// Container for the uniforms of a shader
+struct Uniforms
 {
-    public:
-    SPMandelbrotShader( ) : MandelbrotShader()
-    {
-        loadShaderFiles("Vertex.glsl","PixelF.glsl");
-        GL_ASSERT(m_centerUniform = glGetUniformLocation(getID(), "center"));
-        GL_ASSERT(m_scaleUniform  = glGetUniformLocation(getID(), "scale"));
-        GL_ASSERT(m_ratioUniform  = glGetUniformLocation(getID(), "ratio"));
-    }
-
-    virtual void update( double scale, double centerX, double centerY, double ratio) override
-    {
-        glUniform2f(m_centerUniform, static_cast<GLfloat>(centerX), static_cast<GLfloat>(centerY));
-        glUniform1f(m_scaleUniform, static_cast<GLfloat>(scale));
-        glUniform1f(m_ratioUniform, static_cast<GLfloat>(ratio));
-    }
-
-    private:
-    GLint m_centerUniform;
-    GLint m_scaleUniform;
-    GLint m_ratioUniform;
+    GLint centerUniform; // center coordinates
+    GLint scaleUniform;  // zoom level
+    GLint ratioUniform;  // aspect ratio
+    GLint maxItersUniform;  // max number of mandelbrot function iterations
 };
 
-/// Double-precision shader
-class DPMandelbrotShader : public MandelbrotShader
+// Global variable containing the parameters of current view
+struct Context
 {
-    public:
-    DPMandelbrotShader( ) : MandelbrotShader()
+    // View parameters
+    double centerX{-0.5}; // center point x
+    double centerY{0.0};  // center point y
+    double scale{2};      // zoom level
+    double ratio{1.0};    // aspect ratio
+    uint   iters{1000};   // max number of Mandelbrot function iterations
+
+    // Shaders and related data
+    ShaderType current_shader {SHADER_FLOAT};
+    std::unique_ptr<ShaderProgram> shaders[MAX_SHADERS];
+    Uniforms uniforms[MAX_SHADERS];
+
+} g_context;
+
+// Update the shader uniforms
+void updateUniforms( const Context& context )
+{
+    CORE_ASSERT( context.current_shader < MAX_SHADERS, "Invalid shader");
+    const Uniforms& u = context.uniforms[context.current_shader];
+    switch (context.current_shader)
     {
-        loadShaderFiles("Vertex.glsl","PixelFF.glsl");
-        GL_ASSERT(m_centerUniform = glGetUniformLocation(getID(), "center"));
-        GL_ASSERT(m_scaleUniform  = glGetUniformLocation(getID(), "scale"));
-        GL_ASSERT(m_ratioUniform  = glGetUniformLocation(getID(), "ratio"));
+        case SHADER_FLOAT:
+        {
+            GL_ASSERT(glUniform2f(u.centerUniform, static_cast<GLfloat>(context.centerX),
+                                                   static_cast<GLfloat>(context.centerY)));
+            GL_ASSERT(glUniform1f(u.scaleUniform, static_cast<GLfloat>(context.scale)));
+            GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+            break;
+        }
+        case SHADER_FLOATFLOAT:
+        {
+            FloatFloat center[2] = { context.centerX, context.centerY };
+            FloatFloat s(context.scale);
+            static_assert( sizeof(center) == 4 * sizeof(float), "Size/align problem " );
+
+            GL_ASSERT(glUniform4fv(u.centerUniform, 1, center[0].values));
+            GL_ASSERT(glUniform2fv(u.scaleUniform, 1, s.values));
+            GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+            break;
+        }
+        default:
+            CORE_ASSERT(false, "should not get here");
     }
-
-    virtual void update( double scale, double centerX, double centerY, double ratio) override
-    {
-        FloatFloat center[2] = { centerX, centerY };
-        FloatFloat s(scale);
-        static_assert( sizeof(center) == 4 * sizeof(float), "Size/align problem " );
-
-        GL_ASSERT(glUniform4fv(m_centerUniform, 1, center[0].values));
-        GL_ASSERT(glUniform2fv(m_scaleUniform, 1, s.values));
-        GL_ASSERT(glUniform1f(m_ratioUniform, static_cast<GLfloat>(ratio)));
-    }
-
-    private:
-    GLint m_centerUniform;
-    GLint m_scaleUniform;
-    GLint m_ratioUniform;
-};
-
-// global variables
-const uint NUM_SHADERS = 2;
-
-MandelbrotShader *shader = nullptr;
-MandelbrotShader* shaders[NUM_SHADERS];
-int shaderid = 0;
-
-double scale    {2};        // zoom level
-double centerX  {-0.5};     // center point x
-double centerY  {0.0};      // center point y
-double ratio    {1.0};      // aspect ratio
+}
 
 int main()
 {
@@ -130,39 +123,49 @@ int main()
         return -1;
     }
 
-    GL_ASSERT( glDisable( GL_DEPTH_TEST ) );
-    GL_ASSERT(glClampColor( GL_CLAMP_READ_COLOR, GL_FALSE));
+    // We don't need to do depth tests, as we are in 2D.
+    GL_ASSERT(glDisable( GL_DEPTH_TEST ) );
 
+    // Print some Open GL boilerplate
     std::cout << "Renderer : " << glGetString( GL_RENDERER ) << std::endl;
     std::cout << "Vendor   : " << glGetString( GL_VENDOR ) << std::endl;
     std::cout << "OpenGL   : " << glGetString( GL_VERSION ) << std::endl;
     std::cout << "GLSL     : " << glGetString( GL_SHADING_LANGUAGE_VERSION ) <<std::endl;
 
-    // build and compile our shader program
-    // ------------------------------------
-    SPMandelbrotShader shader_sp;
-    DPMandelbrotShader shader_dp;
+    // build and compile our shader programs
+    // -------------------------------------
+    g_context.shaders[SHADER_FLOAT].reset(new ShaderProgram());
+    g_context.shaders[SHADER_FLOAT]->loadShaderFiles("Vertex.glsl","PixelF.glsl");
 
-    shaders[0] = &shader_sp;
-    shaders[1] = &shader_dp;
+    g_context.shaders[SHADER_FLOATFLOAT].reset(new ShaderProgram());
+    g_context.shaders[SHADER_FLOATFLOAT]->loadShaderFiles("Vertex.glsl","PixelFF.glsl");
 
-    shader = &shader_dp;
-    shaderid = 1;
+    // Initialize each shaders' uniform handles
+    for (uint i = 0; i < MAX_SHADERS; ++i)
+    {
+        Uniforms& u = g_context.uniforms[i];
+        const GLint id = g_context.shaders[i]->getID();
+        GL_ASSERT(u.centerUniform   = glGetUniformLocation(id, "center"));
+        GL_ASSERT(u.scaleUniform    = glGetUniformLocation(id, "scale"));
+        GL_ASSERT(u.ratioUniform    = glGetUniformLocation(id, "ratio"));
+        GL_ASSERT(u.maxItersUniform = glGetUniformLocation(id, "max"));
+    }
 
-    // set up vertex data (and buffer(s)) and configure vertex attributes
+
+    // Set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
-    float vertices[] = {
+    const float vertices[] = {
          1.0f,  1.0f, 0.0f,   // top right
          1.0f, -1.0f, 0.0f,  // bottom right
         -1.0f, -1.0f, 0.0f, // bottom left
         -1.0f,  1.0f, 0.0f,   // top left
     };
-    unsigned int indices[] = {
+    const uint indices[] = {
         0, 1, 3, // first triangle
         1, 2, 3  // second triangle
     };
 
-    unsigned int VBO, VAO, EBO;
+    GLuint VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
@@ -177,9 +180,6 @@ int main()
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(4 * 3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
 
     while (!glfwWindowShouldClose(window))
     {
@@ -188,16 +188,12 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        // select current shader
+        g_context.shaders[g_context.current_shader]->useProgram();
+        updateUniforms(g_context);
 
         // draw
-        shader->useProgram();
-        shader->update(scale, centerX, centerY, ratio);
-
-        //glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        // glBindVertexArray(0); // no need to unbind it every time
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -223,7 +219,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     // make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
-    ratio = float(width) / float(height);
+    g_context.ratio = float(width) / float(height);
 }
 
 void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -240,39 +236,39 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
             }
             case GLFW_KEY_UP:
             {
-                centerY += (scale / sensitivity);
+                g_context.centerY += (g_context.scale / sensitivity);
                 break;
             }
             case GLFW_KEY_DOWN:
             {
-                centerY -= (scale / sensitivity);
+                g_context.centerY -= (g_context.scale / sensitivity);
                 break;
             }
             case GLFW_KEY_RIGHT:
             {
-                centerX += (scale / sensitivity);
+                g_context.centerX += (g_context.scale / sensitivity);
                 break;
             }
             case GLFW_KEY_LEFT:
             {
-                centerX -= (scale / sensitivity);
+                g_context.centerX -= (g_context.scale / sensitivity);
                 break;
             }
             case GLFW_KEY_Z:
             {
-                scale *= (1.0f - 1/sensitivity);
+                g_context.scale *= (1.0f - 1/sensitivity);
                 break;
             }
             case GLFW_KEY_X:
             {
-                scale *= (1.0f + 1/sensitivity);
+                g_context.scale *= (1.0f + 1/sensitivity);
                 break;
             }
             case GLFW_KEY_P:
             {
                 if (action == GLFW_PRESS)
                 {
-                    std::cout << centerX << " " << centerY << " " << scale << std::endl;
+                    std::cout << g_context.centerX << " " << g_context.centerY << " " << g_context.scale << std::endl;
                 }
                 break;
             }
@@ -280,9 +276,8 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
             {
                 if (action == GLFW_PRESS)
                 {
-                    shaderid = (shaderid + 1) % NUM_SHADERS;
-                    std::cout<<" switching to shader" << shaderid<<std::endl;
-                    shader = shaders[shaderid];
+                    g_context.current_shader = ShaderType((g_context.current_shader+ 1) % MAX_SHADERS);
+                    std::cout<<" switching to shader" << g_context.current_shader<<std::endl;
                 }
                 break;
             }

@@ -100,27 +100,6 @@ double centerX  {-0.5};     // center point x
 double centerY  {0.0};      // center point y
 double ratio    {1.0};      // aspect ratio
 
-std::string float2hex( float x )
-{
-    static_assert(sizeof( float ) == sizeof( uint32 ), "`float` is not 32 bits wide");
-    union { float f; uint32 i; } f2ui;
-    char buf[sizeof( "0x00000000" )];
-    f2ui.f = x;
-    sprintf_s( buf, "0x%" PRIx32 , f2ui.i );
-    return std::string( buf );
-}
-
-std::string double2hex( double x )
-{
-    static_assert(sizeof( double ) == sizeof( uint64 ), "`float` is not 32 bits wide");
-    union { double d; uint64 i; } d2ui;
-    char buf[sizeof( "0x0000000000000000" )];
-    d2ui.d = x;
-    sprintf_s( buf, "0x%" PRIx64, d2ui.i );
-    return std::string( buf );
-}
-
-
 int main()
 {
     // glfw: initialize and configure

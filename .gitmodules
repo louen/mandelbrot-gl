@@ -1,0 +1,3 @@
+[submodule "include/CoreCpp"]
+	path = include/CoreCpp
+	url = https://github.com/louen/CoreCpp.git

@@ -33,6 +33,7 @@ enum ShaderType
 {
     SHADER_FLOAT = 0, // Basic shader with floating-point precision
     SHADER_FLOATFLOAT, // Double precision emulation with 2 floats
+    SHADER_DOUBLE, // True double precision 
     MAX_SHADERS // Total number of available shaders
 };
 
@@ -88,6 +89,14 @@ void updateUniforms( const Context& context )
             GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
             break;
         }
+        case SHADER_DOUBLE:
+        {
+            GL_ASSERT(glUniform2d(u.centerUniform, static_cast<GLdouble>(context.centerX),
+                                                   static_cast<GLdouble>(context.centerY)));
+            GL_ASSERT(glUniform1d(u.scaleUniform, static_cast<GLdouble>(context.scale)));
+            GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+            break;
+        }
         default:
             CORE_ASSERT(false, "should not get here");
     }
@@ -139,6 +148,9 @@ int main()
 
     g_context.shaders[SHADER_FLOATFLOAT].reset(new ShaderProgram());
     g_context.shaders[SHADER_FLOATFLOAT]->loadShaderFiles("Vertex.glsl","PixelFF.glsl");
+
+    g_context.shaders[SHADER_DOUBLE].reset(new ShaderProgram());
+    g_context.shaders[SHADER_DOUBLE]->loadShaderFiles("Vertex.glsl","PixelD.glsl");
 
     // Initialize each shaders' uniform handles
     for (uint i = 0; i < MAX_SHADERS; ++i)

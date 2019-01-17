@@ -19,22 +19,21 @@ void main()
     vec4 pos_cff = cff_from_cf( pos );
     vec4 scaled_pos = cff_scale( pos_cff, scale2D );
 
-	vec4 p = cff_add( scaled_pos , center);
+    vec4 p = cff_add( scaled_pos , center);
     vec4 c = p;
 
-    //Max number of iterations will arbitrarily be defined as 100. Finer detail with more computation will be found for larger values.
     vec4 color = vec4(0,0,0,0);
-	for(uint i = 0u; i < max; i++)
+    for(uint i = 0u; i < max; i++)
     {
-		//Perform complex number arithmetic
-		p = cff_add(cff_mul(p,p),c);
-		vec2 sqMax = ff_from_float(4.0);
-		if ( ff_cmp(cff_norm(p) , sqMax ) > 0 )
+        //Perform complex number arithmetic
+        p = cff_add(cff_mul(p,p),c);
+        vec2 sqMax = ff_from_float(4.0);
+        if ( ff_cmp(cff_norm(p) , sqMax ) > 0 )
         {
-			color = colorScheme(i,max, dot(p,p),2.0);
-			break;
-		}
-	}
+            color = colorScheme(i,max, dot(p,p),2.0);
+            break;
+        }
+    }
 
-	FragColor = color;
+    FragColor = color;
 }

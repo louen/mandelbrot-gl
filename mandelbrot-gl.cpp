@@ -33,7 +33,7 @@ enum ShaderType
 {
     SHADER_FLOAT = 0, // Basic shader with floating-point precision
     SHADER_FLOATFLOAT, // Double precision emulation with 2 floats
-    SHADER_DOUBLE, // True double precision 
+    SHADER_DOUBLE, // True double precision
     MAX_SHADERS // Total number of available shaders
 };
 
@@ -76,6 +76,7 @@ void updateUniforms( const Context& context )
                                                    static_cast<GLfloat>(context.centerY)));
             GL_ASSERT(glUniform1f(u.scaleUniform, static_cast<GLfloat>(context.scale)));
             GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+            GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
             break;
         }
         case SHADER_FLOATFLOAT:
@@ -87,6 +88,7 @@ void updateUniforms( const Context& context )
             GL_ASSERT(glUniform4fv(u.centerUniform, 1, center[0].values));
             GL_ASSERT(glUniform2fv(u.scaleUniform, 1, s.values));
             GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+            GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
             break;
         }
         case SHADER_DOUBLE:
@@ -95,6 +97,7 @@ void updateUniforms( const Context& context )
                                                    static_cast<GLdouble>(context.centerY)));
             GL_ASSERT(glUniform1d(u.scaleUniform, static_cast<GLdouble>(context.scale)));
             GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+            GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
             break;
         }
         default:
@@ -234,6 +237,13 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     g_context.ratio = float(width) / float(height);
 }
 
+// Keyboard controls
+// ESC : quit
+// Arrow keys : move view
+// Z / X : zoom + / zoom -
+// I/ J : increase / decrease iterations
+// P : print current view coordinates
+// S : cycle shaders
 void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
     const float sensitivity = 100.f; // Input sensitivity.
@@ -276,11 +286,24 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
                 g_context.scale *= (1.0f + 1/sensitivity);
                 break;
             }
+            case GLFW_KEY_I:
+            {
+                g_context.iters = std::min( 100000u, g_context.iters * 10 );
+                break;
+            }
+            case GLFW_KEY_J:
+            {
+                g_context.iters = std::max( 1u, g_context.iters / 10 );
+                break;
+            }
             case GLFW_KEY_P:
             {
                 if (action == GLFW_PRESS)
                 {
-                    std::cout << g_context.centerX << " " << g_context.centerY << " " << g_context.scale << std::endl;
+                    std::cout << g_context.centerX << " "
+                        << g_context.centerY << " "
+                        << g_context.scale
+                        <<"("<<g_context.iters<<")"<<std::endl;
                 }
                 break;
             }

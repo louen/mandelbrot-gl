@@ -4,6 +4,9 @@
 // "Extended-Precision Floating-Point Numbers for GPU Computation" (Andrew Thall, 2007)
 // "Heavy computing with GLSL"  H.Thasler https://www.thasler.com/blog/blog/glsl-part2-emu
 // "Emulated 64-bit floats in OpenGL ES shader"  https://betelge.wordpress.com/2016/08/14/emulated-64-bit-floats-in-opengl-es-shader/
+// Original OpenGL boilerplate code from learnopengl.com tutorial
+
+
 #define NOMINMAX
 
 #include <glad/glad.h>
@@ -12,6 +15,7 @@
 #include <iostream>
 #include <cstdint>
 #include <cinttypes>
+#include<chrono>
 #include <algorithm>
 
 #include <CoreMacros.hpp>
@@ -61,6 +65,8 @@ struct Context
     std::unique_ptr<ShaderProgram> shaders[MAX_SHADERS];
     Uniforms uniforms[MAX_SHADERS];
 
+    bool benchmark;
+
 } g_context;
 
 // Update the shader uniforms
@@ -104,6 +110,71 @@ void updateUniforms( const Context& context )
             CORE_ASSERT(false, "should not get here");
     }
 }
+
+using ns_clock = std::chrono::high_resolution_clock;
+
+class FPSMonitor
+{
+  public:
+    FPSMonitor(uint avg = 100)
+    {
+        setAvgFrames(avg);
+    }
+    void report(const ns_clock::time_point &start,
+                const ns_clock::time_point &update,
+                const ns_clock::time_point &render,
+                const ns_clock::time_point &end)
+    {
+        updateTime += ns_clock::duration(update - start).count();
+        renderTime += ns_clock::duration(render - update).count();
+        uiTime += ns_clock::duration(end - render).count();
+        if (++frameCounter == avgFrames)
+        {
+            print();
+            reset();
+        }
+    }
+
+    void print()
+    {
+        auto f = [avgFrames = avgFrames](const std::string &name, uint64 t)
+        {
+            CORE_ASSERT( name.length() < 10, "");
+            std::string spaces = std::string( 10 - name.length() + 1, ' ');
+
+            std::cout << name << spaces <<
+                      t / avgFrames << " ns ("
+                      << double(avgFrames * 1e9) / double(t) << " fps )"
+                      << std::endl;
+        };
+         f("Update", updateTime);
+         f("Render", renderTime);
+         f("UI", uiTime);
+         std::cout<<std::endl;
+    }
+
+    void setAvgFrames(uint avg)
+    {
+        // ensure we average over at least one frame
+        avgFrames = std::max(1u, avg);
+        reset();
+    }
+
+  private:
+    void reset()
+    {
+        // reset data
+        frameCounter = 0;
+        updateTime = 0;
+        renderTime = 0;
+        uiTime = 0;
+    }
+    uint avgFrames;
+    uint frameCounter;
+    uint64 updateTime;
+    uint64 renderTime;
+    uint64 uiTime;
+};
 
 int main()
 {
@@ -166,7 +237,6 @@ int main()
         GL_ASSERT(u.maxItersUniform = glGetUniformLocation(id, "max"));
     }
 
-
     // Set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     const float vertices[] = {
@@ -196,8 +266,13 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
 
+    ns_clock::time_point start, update, render, end;
+    FPSMonitor monitor(1000);
+
     while (!glfwWindowShouldClose(window))
     {
+        start = std::chrono::high_resolution_clock::now();
+
         // render
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -207,13 +282,21 @@ int main()
         g_context.shaders[g_context.current_shader]->useProgram();
         updateUniforms(g_context);
 
+        update = std::chrono::high_resolution_clock::now();
+
         // draw
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        render = std::chrono::high_resolution_clock::now();
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        end = std::chrono::high_resolution_clock::now();
+
+        monitor.report(start, update, render,end);
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
@@ -221,9 +304,11 @@ int main()
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
 
+
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
+
     return 0;
 }
 

@@ -123,11 +123,13 @@ class FPSMonitor
     void report(const ns_clock::time_point &start,
                 const ns_clock::time_point &update,
                 const ns_clock::time_point &render,
+                const ns_clock::time_point &swap,
                 const ns_clock::time_point &end)
     {
         updateTime += ns_clock::duration(update - start).count();
         renderTime += ns_clock::duration(render - update).count();
-        uiTime += ns_clock::duration(end - render).count();
+        swapTime += ns_clock::duration(swap - render).count();
+        uiTime += ns_clock::duration(end - swap).count();
         if (++frameCounter == avgFrames)
         {
             print();
@@ -149,6 +151,7 @@ class FPSMonitor
         };
          f("Update", updateTime);
          f("Render", renderTime);
+         f("Swap", swapTime);
          f("UI", uiTime);
          std::cout<<std::endl;
     }
@@ -160,21 +163,26 @@ class FPSMonitor
         reset();
     }
 
-  private:
     void reset()
     {
         // reset data
         frameCounter = 0;
         updateTime = 0;
         renderTime = 0;
+        swapTime =0;
         uiTime = 0;
     }
+
+  private:
     uint avgFrames;
     uint frameCounter;
     uint64 updateTime;
     uint64 renderTime;
+    uint64 swapTime;
     uint64 uiTime;
 };
+
+FPSMonitor g_monitor(100);
 
 int main()
 {
@@ -266,8 +274,7 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
 
-    ns_clock::time_point start, update, render, end;
-    FPSMonitor monitor(1000);
+    ns_clock::time_point start, update, render, swap, end;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -289,14 +296,17 @@ int main()
 
         render = std::chrono::high_resolution_clock::now();
 
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
+        // glfw: swap buffers
         glfwSwapBuffers(window);
+
+        swap = std::chrono::high_resolution_clock::now();
+
+        // glfw : ui
         glfwPollEvents();
 
         end = std::chrono::high_resolution_clock::now();
 
-        monitor.report(start, update, render,end);
+        g_monitor.report(start, update, render,swap, end);
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
@@ -398,6 +408,7 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
                 {
                     g_context.current_shader = ShaderType((g_context.current_shader+ 1) % MAX_SHADERS);
                     std::cout<<" switching to shader" << g_context.current_shader<<std::endl;
+                    g_monitor.reset();
                 }
                 break;
             }

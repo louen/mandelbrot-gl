@@ -35,17 +35,14 @@ vec2 ff_mul(vec2 a, vec2 b)
 {
     const float split = 8193.0; // = 2^13 + 1
 
-    precise float ca = split * a.x;
-    precise float cb = split * b.x;
+    precise vec2 vx = vec2(a.x,b.x);
 
-    precise float v1a = ca - (ca - a.x);
-    precise float v1b = cb - (cb - b.x);
-
-    precise float v2a = a.x - v1a;
-    precise float v2b = b.x - v1b;
+    precise vec2 c = split * vx;
+    precise vec2 v1 = c - (c - vx);
+    precise vec2 v2 = vx - v1;
 
     precise float c11 = a.x * b.x ; // products of the high parts
-    precise float c21 = v2a * v2b + (v2a * v1b + (v1a * v2b + ( v1a * v1b - c11)));
+    precise float c21 = v2.x * v2.y + ( v2.x * v1.y + (v1.x * v2.y + (v1.x * v1.y - c11)));
 
     precise float c2 = a.x * b.y + a.y * b.x; // cross-products
 

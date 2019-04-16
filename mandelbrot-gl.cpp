@@ -18,7 +18,10 @@
 #include<chrono>
 #include <algorithm>
 
+#include <fstream>
+
 #include <CoreMacros.hpp>
+#include <CoreStrings.hpp>
 
 #include "Shader.hpp"
 #include "FloatFloat.hpp"
@@ -65,9 +68,54 @@ struct Context
     std::unique_ptr<ShaderProgram> shaders[MAX_SHADERS];
     Uniforms uniforms[MAX_SHADERS];
 
-    bool benchmark;
-
 } g_context;
+
+
+void save(const Context& context, const std::string& filename)
+{
+    std::string saveString;
+
+    // Print the floats to hex to get the exact value
+    saveString += core::double2hex(context.centerX);
+    saveString += " ";
+    saveString += core::double2hex(context.centerY);
+    saveString +=" ";
+    saveString += core::double2hex(context.scale);
+
+    std::ofstream of{filename};
+    CORE_ASSERT( of.good(), "Can't open "<<filename );
+    of<<saveString;
+}
+
+void load(Context& context, const std::string& filename)
+{
+    static_assert( sizeof( context.centerX) ==sizeof(uint64), "Assuming 64 bits double");
+
+    union {
+        double f;
+        uint64 i;
+    } x, y, s;
+
+
+    std::ifstream in(filename);
+
+    CORE_ASSERT(in.good(), " Can't open "<<filename );
+
+    std::string l;
+    std::getline(in,l);
+    auto vec = core::splitString(l,' ');
+
+    CORE_ASSERT(vec.size() == 3, "Incorrect file format");
+
+    x.i = _strtoui64(vec[0].c_str(), NULL, 16);
+    y.i = _strtoui64(vec[1].c_str(), NULL, 16);
+    s.i = _strtoui64(vec[2].c_str(), NULL, 16);
+
+    context.centerX = x.f;
+    context.centerY = y.f;
+    context.scale= s.f;
+
+}
 
 // Update the shader uniforms
 void updateUniforms( const Context& context )
@@ -410,6 +458,16 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
                     std::cout<<" switching to shader" << g_context.current_shader<<std::endl;
                     g_monitor.reset();
                 }
+                break;
+            }
+            case GLFW_KEY_F5:
+            {
+                save(g_context, "mbrot.sav");
+                break;
+            }
+            case GLFW_KEY_F9:
+            {
+                load( g_context, "mbrot.sav");
                 break;
             }
         } // switch

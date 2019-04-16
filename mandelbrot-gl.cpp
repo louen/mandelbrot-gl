@@ -6,7 +6,6 @@
 // "Emulated 64-bit floats in OpenGL ES shader"  https://betelge.wordpress.com/2016/08/14/emulated-64-bit-floats-in-opengl-es-shader/
 // Original OpenGL boilerplate code from learnopengl.com tutorial
 
-
 #define NOMINMAX
 
 #include <glad/glad.h>
@@ -15,7 +14,7 @@
 #include <iostream>
 #include <cstdint>
 #include <cinttypes>
-#include<chrono>
+#include <chrono>
 #include <algorithm>
 
 #include <fstream>
@@ -26,10 +25,9 @@
 #include "Shader.hpp"
 #include "FloatFloat.hpp"
 
-
 // glfw callbacks
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void keyboard_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void framebuffer_size_callback(GLFWwindow *window, int width, int height);
+void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
 // initial settings
 const unsigned int SCR_WIDTH = 800;
@@ -38,19 +36,19 @@ const unsigned int SCR_HEIGHT = 800;
 // Shaders available
 enum ShaderType
 {
-    SHADER_FLOAT = 0, // Basic shader with floating-point precision
+    SHADER_FLOAT = 0,  // Basic shader with floating-point precision
     SHADER_FLOATFLOAT, // Double precision emulation with 2 floats
-    SHADER_DOUBLE, // True double precision
-    MAX_SHADERS // Total number of available shaders
+    SHADER_DOUBLE,     // True double precision
+    MAX_SHADERS        // Total number of available shaders
 };
 
 // Container for the uniforms of a shader
 struct Uniforms
 {
-    GLint centerUniform; // center coordinates
-    GLint scaleUniform;  // zoom level
-    GLint ratioUniform;  // aspect ratio
-    GLint maxItersUniform;  // max number of mandelbrot function iterations
+    GLint centerUniform;   // center coordinates
+    GLint scaleUniform;    // zoom level
+    GLint ratioUniform;    // aspect ratio
+    GLint maxItersUniform; // max number of mandelbrot function iterations
 };
 
 // Global variable containing the parameters of current view
@@ -61,17 +59,16 @@ struct Context
     double centerY{0.0};  // center point y
     double scale{2};      // zoom level
     double ratio{1.0};    // aspect ratio
-    uint   iters{1000};   // max number of Mandelbrot function iterations
+    uint iters{1000};     // max number of Mandelbrot function iterations
 
     // Shaders and related data
-    ShaderType current_shader {SHADER_FLOAT};
+    ShaderType current_shader{SHADER_FLOAT};
     std::unique_ptr<ShaderProgram> shaders[MAX_SHADERS];
     Uniforms uniforms[MAX_SHADERS];
 
 } g_context;
 
-
-void save(const Context& context, const std::string& filename)
+void save(const Context &context, const std::string &filename)
 {
     std::string saveString;
 
@@ -79,31 +76,30 @@ void save(const Context& context, const std::string& filename)
     saveString += core::double2hex(context.centerX);
     saveString += " ";
     saveString += core::double2hex(context.centerY);
-    saveString +=" ";
+    saveString += " ";
     saveString += core::double2hex(context.scale);
 
     std::ofstream of{filename};
-    CORE_ASSERT( of.good(), "Can't open "<<filename );
-    of<<saveString;
+    CORE_ASSERT(of.good(), "Can't open " << filename);
+    of << saveString;
 }
 
-void load(Context& context, const std::string& filename)
+void load(Context &context, const std::string &filename)
 {
-    static_assert( sizeof( context.centerX) ==sizeof(uint64), "Assuming 64 bits double");
+    static_assert(sizeof(context.centerX) == sizeof(uint64), "Assuming 64 bits double");
 
     union {
         double f;
         uint64 i;
     } x, y, s;
 
-
     std::ifstream in(filename);
 
-    CORE_ASSERT(in.good(), " Can't open "<<filename );
+    CORE_ASSERT(in.good(), " Can't open " << filename);
 
     std::string l;
-    std::getline(in,l);
-    auto vec = core::splitString(l,' ');
+    std::getline(in, l);
+    auto vec = core::splitString(l, ' ');
 
     CORE_ASSERT(vec.size() == 3, "Incorrect file format");
 
@@ -113,49 +109,48 @@ void load(Context& context, const std::string& filename)
 
     context.centerX = x.f;
     context.centerY = y.f;
-    context.scale= s.f;
-
+    context.scale = s.f;
 }
 
 // Update the shader uniforms
-void updateUniforms( const Context& context )
+void updateUniforms(const Context &context)
 {
-    CORE_ASSERT( context.current_shader < MAX_SHADERS, "Invalid shader");
-    const Uniforms& u = context.uniforms[context.current_shader];
+    CORE_ASSERT(context.current_shader < MAX_SHADERS, "Invalid shader");
+    const Uniforms &u = context.uniforms[context.current_shader];
     switch (context.current_shader)
     {
-        case SHADER_FLOAT:
-        {
-            GL_ASSERT(glUniform2f(u.centerUniform, static_cast<GLfloat>(context.centerX),
-                                                   static_cast<GLfloat>(context.centerY)));
-            GL_ASSERT(glUniform1f(u.scaleUniform, static_cast<GLfloat>(context.scale)));
-            GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
-            GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
-            break;
-        }
-        case SHADER_FLOATFLOAT:
-        {
-            FloatFloat center[2] = { context.centerX, context.centerY };
-            FloatFloat s(context.scale);
-            static_assert( sizeof(center) == 4 * sizeof(float), "Size/align problem " );
+    case SHADER_FLOAT:
+    {
+        GL_ASSERT(glUniform2f(u.centerUniform, static_cast<GLfloat>(context.centerX),
+                              static_cast<GLfloat>(context.centerY)));
+        GL_ASSERT(glUniform1f(u.scaleUniform, static_cast<GLfloat>(context.scale)));
+        GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+        GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
+        break;
+    }
+    case SHADER_FLOATFLOAT:
+    {
+        FloatFloat center[2] = {context.centerX, context.centerY};
+        FloatFloat s(context.scale);
+        static_assert(sizeof(center) == 4 * sizeof(float), "Size/align problem ");
 
-            GL_ASSERT(glUniform4fv(u.centerUniform, 1, center[0].values));
-            GL_ASSERT(glUniform2fv(u.scaleUniform, 1, s.values));
-            GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
-            GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
-            break;
-        }
-        case SHADER_DOUBLE:
-        {
-            GL_ASSERT(glUniform2d(u.centerUniform, static_cast<GLdouble>(context.centerX),
-                                                   static_cast<GLdouble>(context.centerY)));
-            GL_ASSERT(glUniform1d(u.scaleUniform, static_cast<GLdouble>(context.scale)));
-            GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
-            GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
-            break;
-        }
-        default:
-            CORE_ASSERT(false, "should not get here");
+        GL_ASSERT(glUniform4fv(u.centerUniform, 1, center[0].values));
+        GL_ASSERT(glUniform2fv(u.scaleUniform, 1, s.values));
+        GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+        GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
+        break;
+    }
+    case SHADER_DOUBLE:
+    {
+        GL_ASSERT(glUniform2d(u.centerUniform, static_cast<GLdouble>(context.centerX),
+                              static_cast<GLdouble>(context.centerY)));
+        GL_ASSERT(glUniform1d(u.scaleUniform, static_cast<GLdouble>(context.scale)));
+        GL_ASSERT(glUniform1f(u.ratioUniform, static_cast<GLfloat>(context.ratio)));
+        GL_ASSERT(glUniform1ui(u.maxItersUniform, static_cast<GLuint>(context.iters)));
+        break;
+    }
+    default:
+        CORE_ASSERT(false, "should not get here");
     }
 }
 
@@ -187,21 +182,19 @@ class FPSMonitor
 
     void print()
     {
-        auto f = [avgFrames = avgFrames](const std::string &name, uint64 t)
-        {
-            CORE_ASSERT( name.length() < 10, "");
-            std::string spaces = std::string( 10 - name.length() + 1, ' ');
+        auto f = [avgFrames = avgFrames](const std::string &name, uint64 t) {
+            CORE_ASSERT(name.length() < 10, "");
+            std::string spaces = std::string(10 - name.length() + 1, ' ');
 
-            std::cout << name << spaces <<
-                      t / avgFrames << " ns ("
+            std::cout << name << spaces << t / avgFrames << " ns ("
                       << double(avgFrames * 1e9) / double(t) << " fps )"
                       << std::endl;
         };
-         f("Update", updateTime);
-         f("Render", renderTime);
-         f("Swap", swapTime);
-         f("UI", uiTime);
-         std::cout<<std::endl;
+        f("Update", updateTime);
+        f("Render", renderTime);
+        f("Swap", swapTime);
+        f("UI", uiTime);
+        std::cout << std::endl;
     }
 
     void setAvgFrames(uint avg)
@@ -217,7 +210,7 @@ class FPSMonitor
         frameCounter = 0;
         updateTime = 0;
         renderTime = 0;
-        swapTime =0;
+        swapTime = 0;
         uiTime = 0;
     }
 
@@ -263,43 +256,43 @@ int main()
     }
 
     // We don't need to do depth tests, as we are in 2D.
-    GL_ASSERT(glDisable( GL_DEPTH_TEST ) );
+    GL_ASSERT(glDisable(GL_DEPTH_TEST));
 
     // Print some Open GL boilerplate
-    std::cout << "Renderer : " << glGetString( GL_RENDERER ) << std::endl;
-    std::cout << "Vendor   : " << glGetString( GL_VENDOR ) << std::endl;
-    std::cout << "OpenGL   : " << glGetString( GL_VERSION ) << std::endl;
-    std::cout << "GLSL     : " << glGetString( GL_SHADING_LANGUAGE_VERSION ) <<std::endl;
+    std::cout << "Renderer : " << glGetString(GL_RENDERER) << std::endl;
+    std::cout << "Vendor   : " << glGetString(GL_VENDOR) << std::endl;
+    std::cout << "OpenGL   : " << glGetString(GL_VERSION) << std::endl;
+    std::cout << "GLSL     : " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
     // build and compile our shader programs
     // -------------------------------------
     g_context.shaders[SHADER_FLOAT].reset(new ShaderProgram());
-    g_context.shaders[SHADER_FLOAT]->loadShaderFiles("Vertex.glsl","PixelF.glsl");
+    g_context.shaders[SHADER_FLOAT]->loadShaderFiles("Vertex.glsl", "PixelF.glsl");
 
     g_context.shaders[SHADER_FLOATFLOAT].reset(new ShaderProgram());
-    g_context.shaders[SHADER_FLOATFLOAT]->loadShaderFiles("Vertex.glsl","PixelFF.glsl");
+    g_context.shaders[SHADER_FLOATFLOAT]->loadShaderFiles("Vertex.glsl", "PixelFF.glsl");
 
     g_context.shaders[SHADER_DOUBLE].reset(new ShaderProgram());
-    g_context.shaders[SHADER_DOUBLE]->loadShaderFiles("Vertex.glsl","PixelD.glsl");
+    g_context.shaders[SHADER_DOUBLE]->loadShaderFiles("Vertex.glsl", "PixelD.glsl");
 
     // Initialize each shaders' uniform handles
     for (uint i = 0; i < MAX_SHADERS; ++i)
     {
-        Uniforms& u = g_context.uniforms[i];
+        Uniforms &u = g_context.uniforms[i];
         const GLint id = g_context.shaders[i]->getID();
-        GL_ASSERT(u.centerUniform   = glGetUniformLocation(id, "center"));
-        GL_ASSERT(u.scaleUniform    = glGetUniformLocation(id, "scale"));
-        GL_ASSERT(u.ratioUniform    = glGetUniformLocation(id, "ratio"));
+        GL_ASSERT(u.centerUniform = glGetUniformLocation(id, "center"));
+        GL_ASSERT(u.scaleUniform = glGetUniformLocation(id, "scale"));
+        GL_ASSERT(u.ratioUniform = glGetUniformLocation(id, "ratio"));
         GL_ASSERT(u.maxItersUniform = glGetUniformLocation(id, "max"));
     }
 
     // Set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     const float vertices[] = {
-         1.0f,  1.0f, 0.0f,   // top right
-         1.0f, -1.0f, 0.0f,  // bottom right
+        1.0f, 1.0f, 0.0f,   // top right
+        1.0f, -1.0f, 0.0f,  // bottom right
         -1.0f, -1.0f, 0.0f, // bottom left
-        -1.0f,  1.0f, 0.0f,   // top left
+        -1.0f, 1.0f, 0.0f,  // top left
     };
     const uint indices[] = {
         0, 1, 3, // first triangle
@@ -354,14 +347,13 @@ int main()
 
         end = std::chrono::high_resolution_clock::now();
 
-        g_monitor.report(start, update, render,swap, end);
+        g_monitor.report(start, update, render, swap, end);
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
@@ -387,6 +379,8 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 // I/ J : increase / decrease iterations
 // P : print current view coordinates
 // S : cycle shaders
+// F5 : save current view coordinates
+// F9 : load saved coordinates
 void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
 {
     const float sensitivity = 100.f; // Input sensitivity.
@@ -394,82 +388,82 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
     {
         switch (key)
         {
-            case GLFW_KEY_ESCAPE:
+        case GLFW_KEY_ESCAPE:
+        {
+            glfwSetWindowShouldClose(window, true);
+            break;
+        }
+        case GLFW_KEY_UP:
+        {
+            g_context.centerY += (g_context.scale / sensitivity);
+            break;
+        }
+        case GLFW_KEY_DOWN:
+        {
+            g_context.centerY -= (g_context.scale / sensitivity);
+            break;
+        }
+        case GLFW_KEY_RIGHT:
+        {
+            g_context.centerX += (g_context.scale / sensitivity);
+            break;
+        }
+        case GLFW_KEY_LEFT:
+        {
+            g_context.centerX -= (g_context.scale / sensitivity);
+            break;
+        }
+        case GLFW_KEY_Z:
+        {
+            g_context.scale *= (1.0f - 1 / sensitivity);
+            break;
+        }
+        case GLFW_KEY_X:
+        {
+            g_context.scale *= (1.0f + 1 / sensitivity);
+            break;
+        }
+        case GLFW_KEY_I:
+        {
+            g_context.iters = std::min(100000u, g_context.iters * 10);
+            break;
+        }
+        case GLFW_KEY_J:
+        {
+            g_context.iters = std::max(1u, g_context.iters / 10);
+            break;
+        }
+        case GLFW_KEY_P:
+        {
+            if (action == GLFW_PRESS)
             {
-                glfwSetWindowShouldClose(window, true);
-                break;
+                std::cout << g_context.centerX << " "
+                          << g_context.centerY << " "
+                          << g_context.scale
+                          << "(" << g_context.iters << ")" << std::endl;
             }
-            case GLFW_KEY_UP:
+            break;
+        }
+        case GLFW_KEY_S:
+        {
+            if (action == GLFW_PRESS)
             {
-                g_context.centerY += (g_context.scale / sensitivity);
-                break;
+                g_context.current_shader = ShaderType((g_context.current_shader + 1) % MAX_SHADERS);
+                std::cout << " switching to shader" << g_context.current_shader << std::endl;
+                g_monitor.reset();
             }
-            case GLFW_KEY_DOWN:
-            {
-                g_context.centerY -= (g_context.scale / sensitivity);
-                break;
-            }
-            case GLFW_KEY_RIGHT:
-            {
-                g_context.centerX += (g_context.scale / sensitivity);
-                break;
-            }
-            case GLFW_KEY_LEFT:
-            {
-                g_context.centerX -= (g_context.scale / sensitivity);
-                break;
-            }
-            case GLFW_KEY_Z:
-            {
-                g_context.scale *= (1.0f - 1/sensitivity);
-                break;
-            }
-            case GLFW_KEY_X:
-            {
-                g_context.scale *= (1.0f + 1/sensitivity);
-                break;
-            }
-            case GLFW_KEY_I:
-            {
-                g_context.iters = std::min( 100000u, g_context.iters * 10 );
-                break;
-            }
-            case GLFW_KEY_J:
-            {
-                g_context.iters = std::max( 1u, g_context.iters / 10 );
-                break;
-            }
-            case GLFW_KEY_P:
-            {
-                if (action == GLFW_PRESS)
-                {
-                    std::cout << g_context.centerX << " "
-                        << g_context.centerY << " "
-                        << g_context.scale
-                        <<"("<<g_context.iters<<")"<<std::endl;
-                }
-                break;
-            }
-            case GLFW_KEY_S:
-            {
-                if (action == GLFW_PRESS)
-                {
-                    g_context.current_shader = ShaderType((g_context.current_shader+ 1) % MAX_SHADERS);
-                    std::cout<<" switching to shader" << g_context.current_shader<<std::endl;
-                    g_monitor.reset();
-                }
-                break;
-            }
-            case GLFW_KEY_F5:
-            {
-                save(g_context, "mbrot.sav");
-                break;
-            }
-            case GLFW_KEY_F9:
-            {
-                load( g_context, "mbrot.sav");
-                break;
-            }
+            break;
+        }
+        case GLFW_KEY_F5:
+        {
+            save(g_context, "mbrot.sav");
+            break;
+        }
+        case GLFW_KEY_F9:
+        {
+            load(g_context, "mbrot.sav");
+            break;
+        }
         } // switch
-    } // if (pressed)
+    }     // if (pressed)
 }

@@ -19,6 +19,10 @@
 
 #include <fstream>
 
+#define STBI_MSC_SECURE_CRT
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+
 #include <CoreMacros.hpp>
 #include <CoreStrings.hpp>
 
@@ -61,12 +65,58 @@ struct Context
     double ratio{1.0};    // aspect ratio
     uint iters{1000};     // max number of Mandelbrot function iterations
 
+    // Viewport paramters
+    uint width {SCR_WIDTH};
+    uint height {SCR_HEIGHT};
+
     // Shaders and related data
     ShaderType current_shader{SHADER_FLOAT};
     std::unique_ptr<ShaderProgram> shaders[MAX_SHADERS];
     Uniforms uniforms[MAX_SHADERS];
 
+    // Other UI stuff
+    bool screenshot{false}; // If true, export the next frame as a png
+
 } g_context;
+
+std::vector<uchar> grabFrame(uint w, uint h)
+{
+    // Bind the front buffer
+    const uint format_bytes = 4; // RBGA
+
+    std::vector<uchar> pixels ( format_bytes * w *h);
+    glReadPixels(0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE, pixels.data());
+
+    // Flip pixels
+    std::vector<uchar> pixels_flipped ( format_bytes * w *h);
+
+    for (uint n =0; n < pixels.size(); n+=4)
+    {
+        const uint pix = n / 4;
+
+        // pix = ( j * w + i)
+
+        const uint i = pix % w;
+        const uint j = pix / w;
+
+        const uint fl_pix = ((h - 1 - j) * w) + i;
+        const uint fl_n = 4 * fl_pix;
+
+        pixels_flipped[fl_n + 0] = pixels[n + 0];
+        pixels_flipped[fl_n + 1] = pixels[n + 1];
+        pixels_flipped[fl_n + 2] = pixels[n + 2];
+        pixels_flipped[fl_n + 3] = pixels[n + 3];
+    }
+
+    return pixels_flipped;
+}
+
+void save_frame(const std::string& filename, const std::vector<uchar> pixels, uint w, uint h)
+{
+    CORE_ASSERT(pixels.size() == 4 * w * h,"Inconsistent buffer size");
+    stbi_write_png(filename.c_str(), w, h, 4, pixels.data(), w * 4 );
+}
+
 
 void save(const Context &context, const std::string &filename)
 {
@@ -156,6 +206,7 @@ void updateUniforms(const Context &context)
 
 using ns_clock = std::chrono::high_resolution_clock;
 
+/// Utility class to gather timings and print the average over a given frame interval
 class FPSMonitor
 {
   public:
@@ -192,8 +243,8 @@ class FPSMonitor
         };
         f("Update", updateTime);
         f("Render", renderTime);
-        f("Swap", swapTime);
-        f("UI", uiTime);
+        f("Swap  ", swapTime);
+        f("UI    ", uiTime);
         std::cout << std::endl;
     }
 
@@ -317,12 +368,14 @@ int main()
 
     ns_clock::time_point start, update, render, swap, end;
 
+    ulong frame_counter = 0;
+
+    // Main loop
     while (!glfwWindowShouldClose(window))
     {
         start = std::chrono::high_resolution_clock::now();
 
-        // render
-        // ------
+        // start render
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -337,10 +390,22 @@ int main()
 
         render = std::chrono::high_resolution_clock::now();
 
+
         // glfw: swap buffers
         glfwSwapBuffers(window);
 
         swap = std::chrono::high_resolution_clock::now();
+       if (g_context.screenshot)
+        {
+            g_context.screenshot = false;
+
+            const uint w = g_context.width;
+            const uint h = g_context.height;
+
+            std::string name="mbrot_frame";
+            core::appendPrintf(name, "%06d.png", frame_counter);
+            save_frame(name, grabFrame(w,h), w,h);
+        }
 
         // glfw : ui
         glfwPollEvents();
@@ -348,6 +413,9 @@ int main()
         end = std::chrono::high_resolution_clock::now();
 
         g_monitor.report(start, update, render, swap, end);
+
+
+        ++frame_counter;
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
@@ -370,6 +438,8 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
     g_context.ratio = float(width) / float(height);
+    g_context.width = width;
+    g_context.height = height;
 }
 
 // Keyboard controls
@@ -464,6 +534,11 @@ void keyboard_callback(GLFWwindow *window, int key, int scancode, int action, in
             load(g_context, "mbrot.sav");
             break;
         }
+        case GLFW_KEY_F12:
+        {
+            g_context.screenshot = true;
+        }
+
         } // switch
     }     // if (pressed)
 }

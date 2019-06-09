@@ -12,6 +12,7 @@
 class ShaderProgram
 {
     public:
+        /// Initialize shader handle (expect openGL context)
         ShaderProgram();
 
         /// Compile a shader from a given string
@@ -35,11 +36,10 @@ class ShaderProgram
         static std::string preprocessIncludes(const std::string& shader, const std::string& filename, uint level = 0);
 
       private:
+        // GL shader and program handles
         GLint m_vertexShader;
         GLint m_pixelShader;
         GLint m_shaderProgram;
-
-
 };
 
 #endif // SHADER_HPP_

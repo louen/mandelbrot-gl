@@ -11,7 +11,7 @@ extents = 3.0           # Simulation drawing extents
 
 magnetic_exponent = 4       # n such as magnetic force = K/(r^n )
 magnetic_constant = 1     # multiplicative constant of magnetic force (in natural units)
-friction = 0.2             # dissipative term
+friction = 0.1             # dissipative term
 height = 0.5
 delta_t = 0.01
 
@@ -20,7 +20,7 @@ magnet_positions = np.array([np.array([
     magnet_radius * np.sin(2 * i * np.pi / num_magnets)])
     for i in range(num_magnets)])
 
-print(magnet_positions)
+#print(magnet_positions)
 
 
 def update(pos, vel, dt):
@@ -37,7 +37,7 @@ def update(pos, vel, dt):
         magnets += v * diff
     
 
-    # Semi implicit euler assuming dt = 1 
+    # Semi implicit euler 
 
     vel += dt * (gravity + magnets)
     vel *= (1.0 - dt*friction)
@@ -70,10 +70,12 @@ ax.scatter(x= magnet_positions[:,0], y = magnet_positions[:,1])
 pos = np.array([1.0,1.0])
 vel = np.zeros(2)
 traj = np.array([pos])
-points, = ax.plot([], [], "ro", ms=1)
+points, = ax.plot([], [], "r,", ms=1)
 
 def init():
     points.set_data([],[])
+    points.set_marker(',')
+    points.set_color('r')
     return points,
 
 def animate(i):
@@ -91,8 +93,10 @@ def animate(i):
 
 
     points.set_data(traj[:,0], traj[:,1])
+    points.set_marker(',')
+    points.set_color('r')
     return points,
 
-anim = animation.FuncAnimation(fig, animate, frames=1000, blit = True, interval = 10, init_func=init)
+anim = animation.FuncAnimation(fig, animate, frames=1000, blit = True, interval = 100, init_func=init)
 
 plt.show()
